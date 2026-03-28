@@ -1,0 +1,24 @@
+[project]
+name = "tinymoa-ihp0p4"
+version = "0.1.0"
+description = "Digital compute-in-memory accelerator core."
+readme = "README.md"
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "cocotb>=2.0.1",
+    "cocotb-test>=0.2.6",
+    "librelane==3.0.0rc1", # Install with `uv add --dev librelane==$LIBRELANE_TAG`
+    "pytest>=9.0.2",
+    "ruff>=0.15.8",
+    "tt-support-tools",
+]
+
+[tool.uv.workspace]
+members = [
+    "tt",
+]
+
+[tool.uv.sources]
+tt-support-tools = { workspace = true }
