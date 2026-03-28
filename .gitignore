@@ -1,13 +1,43 @@
+
+# General
 .DS_Store
-.idea
-*.vcd
+*.bin
+*.hex
+*.map
+*.o
+CLAUDE.md
+.claude/
+.vscode/
+.idea/
+.mypy_cache/
+runs/
+tt/
+config_merged.json
+user_config.json
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# FPGA
+top*.json
+*.blif
+*.asc
+sim_build/
+results.xml
 *.fst
 *.fst.hier
-runs
-tt_submission
-src/user_config.json
-src/config_merged.json
-test/sim_build
-test/__pycache__/
-test/results.xml
-test/gate_level_netlist.v
+*.vcd
+*.ghw
+
+# Coverage
+.coverage
+htmlcov/
