@@ -6,6 +6,7 @@
 */
 
 `default_nettype none
+`timescale 1ns / 1ps
 
 module multiply #(parameter DATA_WIDTH = 32) (
     input  wire        clk,
