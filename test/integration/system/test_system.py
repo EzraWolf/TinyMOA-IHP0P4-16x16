@@ -17,6 +17,7 @@
 #   uio[7]       OUT  done
 #   uio_oe = 8'b11110000
 
+import numpy as np
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles
@@ -166,3 +167,87 @@ async def test_done_flag(dut):
         dut._log.info(f"cycle {cycle}: uio_out=0b{uio_val:08b} done={read_done(dut)}")
     dut.uio_in.value = 0
     dut.ui_in.value = 0
+
+
+# === Numpy DCIM-S reference model ===
+
+
+def dcim_s_popcount(xnor_byte):
+    """DCIM-S approximate popcount of an 8-bit value.
+    Pairs: in[0]&in[1], in[2]|in[3], in[4]&in[5], in[6]|in[7]."""
+    b = [(xnor_byte >> i) & 1 for i in range(8)]
+    return (b[0] & b[1]) + (b[2] | b[3]) + (b[4] & b[5]) + (b[6] | b[7])
+
+
+def dcim_s_mvm(weight_rows, activations):
+    """Reference DCIM-S matrix-vector multiply.
+    weight_rows: list of 8 ints (8-bit), row-major.
+    activations: list of P ints (8-bit), bit-planes.
+    Returns: list of 8 raw accumulator values."""
+    N = len(weight_rows)
+    weight_reg = []
+    for col in range(N):
+        val = 0
+        for row in range(N):
+            if weight_rows[row] & (1 << col):
+                val |= 1 << row
+        weight_reg.append(val)
+
+    shift_acc = [0] * N
+    for act in activations:
+        for col in range(N):
+            xnor = (~(weight_reg[col] ^ act)) & 0xFF
+            pc = dcim_s_popcount(xnor)
+            shift_acc[col] = (shift_acc[col] << 1) + pc
+    return shift_acc
+
+
+@cocotb.test()
+async def test_mvm_random(dut):
+    """Random 8x8 binary MVM through TT pins. Compare against numpy DCIM-S."""
+    rng = np.random.RandomState(42)
+    await setup(dut)
+
+    weight_rows = [int(rng.randint(0, 256)) for _ in range(ARRAY_DIM)]
+    activation = int(rng.randint(0, 256))
+    expected = dcim_s_mvm(weight_rows, [activation])
+
+    dut._log.info(f"weights: {[f'0x{w:02X}' for w in weight_rows]}")
+    dut._log.info(f"activation: 0x{activation:02X}")
+    dut._log.info(f"expected: {expected}")
+
+    await load_weights(dut, weight_rows)
+    await do_execute(dut, activation)
+    results = await read_results(dut)
+
+    dut._log.info(f"results:  {results}")
+    for c in range(ARRAY_DIM):
+        assert results[c] == expected[c], (
+            f"col {c}: got {results[c]}, expected {expected[c]}"
+        )
+
+
+@cocotb.test()
+async def test_mvm_multibit_random(dut):
+    """Random 8x8 binary MVM with 2-bit precision through TT pins."""
+    rng = np.random.RandomState(99)
+    await setup(dut)
+
+    weight_rows = [int(rng.randint(0, 256)) for _ in range(ARRAY_DIM)]
+    act_plane0 = int(rng.randint(0, 256))
+    act_plane1 = int(rng.randint(0, 256))
+    expected = dcim_s_mvm(weight_rows, [act_plane0, act_plane1])
+
+    dut._log.info(f"weights: {[f'0x{w:02X}' for w in weight_rows]}")
+    dut._log.info(f"act planes: 0x{act_plane0:02X}, 0x{act_plane1:02X}")
+    dut._log.info(f"expected: {expected}")
+
+    await load_weights(dut, weight_rows)
+    await do_execute(dut, act_plane0, act_plane1)
+    results = await read_results(dut)
+
+    dut._log.info(f"results:  {results}")
+    for c in range(ARRAY_DIM):
+        assert results[c] == expected[c], (
+            f"col {c}: got {results[c]}, expected {expected[c]}"
+        )
