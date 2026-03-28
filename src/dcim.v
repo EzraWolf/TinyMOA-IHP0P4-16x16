@@ -30,6 +30,7 @@ module tinymoa_dcim #(
     input [ARRAY_DIM-1:0]  data_in,
     input                  wen,
     input                  execute,
+    input                  acc_clear,
 
     input  [$clog2(ARRAY_DIM)-1:0] col_sel,
     output [ACC_WIDTH-1:0]         result,
@@ -38,7 +39,6 @@ module tinymoa_dcim #(
     reg [ARRAY_DIM-1:0] weight_reg [0:ARRAY_DIM-1]; // 2D array of column vectors
     reg [ACC_WIDTH-1:0] shift_acc [0:ARRAY_DIM-1];  // Shift-acc (one/column)
     reg [$clog2(ARRAY_DIM)-1:0] row_cnt;            // Weight transpose row counter
-    reg [ARRAY_DIM-1:0] act_slice;                  // Activation latch
 
     // XNOR + compressor (one/column)
     wire [3:0] comp_out [0:ARRAY_DIM-1];
@@ -47,7 +47,7 @@ module tinymoa_dcim #(
     genvar col;
     generate
         for (col = 0; col < ARRAY_DIM; col = col + 1) begin : gen_col
-            wire [ARRAY_DIM-1:0] xnor_bits = ~(weight_reg[col] ^ act_slice);
+            wire [ARRAY_DIM-1:0] xnor_bits = ~(weight_reg[col] ^ data_in);
 
             tinymoa_compressor_8 comp (
                 .in  (xnor_bits),
@@ -64,7 +64,6 @@ module tinymoa_dcim #(
     always @(posedge clk or negedge nrst) begin
         if (!nrst) begin
             row_cnt   <= 0;
-            act_slice <= 0;
             dbg_done  <= 1'b0;
             for (i = 0; i < ARRAY_DIM; i = i + 1) begin
                 weight_reg[i] <= 0;
@@ -80,8 +79,10 @@ module tinymoa_dcim #(
                 row_cnt <= row_cnt + 1;
             end
 
-            if (execute) begin
-                act_slice <= data_in;
+            if (acc_clear) begin
+                for (i = 0; i < ARRAY_DIM; i = i + 1)
+                    shift_acc[i] <= 0;
+            end else if (execute) begin
                 for (i = 0; i < ARRAY_DIM; i = i + 1)
                     shift_acc[i] <= (shift_acc[i] << 1) + {{(ACC_WIDTH-5){1'b0}}, popcount[i]};
                 dbg_done <= 1'b1;
